@@ -5,4 +5,17 @@
 ## コマンド一覧
 
 
+## .gitignoreの書き方
+
+```
+/tmp/*
+!/tmp/.keep
+!/tmp/pids/
+/tmp/pids/*
+!/tmp/pids/.keep
+!/tmp/sockets/
+/tmp/sockets/*
+!/tmp/sockets/.keep
+```
+
 ;
