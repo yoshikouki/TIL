@@ -1,0 +1,26 @@
+# Railsを5.2.4.2にアップデートする
+
+ActionViewのセキュリティアラートに対応するためにアップデート
+
+Railsチュートリアル後、GitHub上とセキュリティエラーが出てきます
+
+```
+We found a potential security vulnerability in one of your dependencies.
+Only the owner of this repository can see this message.
+```
+
+元バージョンは5.1.7。
+
+## 作業の全体像
+
+- 下調べ・確認。手順書（Railsガイド）・アップデートするバージョン
+- GemfileでRailsのバージョンを書き換える `gem 'rails', '5.2.4.2'`
+- `$ bundle update`
+- `$ rails app:update`
+- Gemfileにを追記 `gem 'bootsnap'`
+- `$ bundle install`
+- 動作確認（`$ rails s`テスト・静的コード解析など）
+
+
+
+
