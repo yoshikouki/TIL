@@ -1,15 +1,19 @@
 # Railsを5.2.4.2にアップデートする
 
-ActionViewのセキュリティアラートに対応するためにアップデート
-
-Railsチュートリアル後、GitHub上とセキュリティエラーが出てきます
+Railsチュートリアル後、GitHub上にはセキュリティアラートが出てきます。
 
 ```
 We found a potential security vulnerability in one of your dependencies.
 Only the owner of this repository can see this message.
 ```
 
-元バージョンは5.1.7。
+大体のアラートはプルリクエストをMergeするだけで解消できますが、ActionViewのセキュリティアラートはそうもいきません。
+更に、ActionView単体のアップデートはできないので、Railsをアップデートすることになります。
+
+今回は、セキュリティアラートに対応すべくRails 5.2.4.2にアップデートしましたので、その手順とエラー対応について報告します。
+※ ActionViewのセキュリティアラートはRails 5.2.4では解消しません。
+
+
 
 ## 作業の全体像
 
@@ -20,18 +24,193 @@ Only the owner of this repository can see this message.
 - Gemfileにを追記 `gem 'bootsnap'`
 - `$ bundle install`
 - 動作確認（`$ rails s`テスト・静的コード解析など）
-- CircleCIのDocker Imageを変更
 
 
-Railsガイド
-https://railsguides.jp/upgrading_ruby_on_rails.html
 
-railsの全バージョン履歴
-https://rubygems.org/gems/rails/versions
+## 下調べ・確認
 
+できれば公式ドキュメントを参考にしましょう。
+ネット上の記事は、この記事も含めて参考程度にするのがオススメです。
 
-Rails 6: Ruby 2.5.0以降が必須です。
+>[Railsガイド](https://railsguides.jp/upgrading_ruby_on_rails.html)
+
+>[railsの全バージョン履歴](https://rubygems.org/gems/rails/versions)
+
+Railsチュートリアルのアプリなら大丈夫だと思いますが、アップデート後のバージョンに合ったRubyバージョンを確認しておきましょう。
+
+>Rails 6: Ruby 2.5.0以降が必須です。
 Rails 5: Ruby 2.2.2以降が必須です。
 Rails 4: Ruby 2.0が推奨されます。Ruby 1.9.3以上が必須です。
+
+
+
+## GemfileのRailsバージョンを書き換える
+
+``` 
+# ./Gemfile
+gem 'rails', '5.2.4.2'
+```
+
+
+
+## コマンドライン操作
+
+```
+$ bundle update
+
+$ rails app:update
+```
+
+rails app:updateを実行するとコンフリクトした設定ファイルを上書きをするかどうか尋ねられます（複数回）
+
+おすすめは、
+- `d`で差分を確認（diffコマンド）
+- `Y`で上書き or `n`でスキップ
+- 対象ファイルを開き、差分から必要なコードをコピペ（上書きなら必要なコードを元に戻す）
+という進め方です。
+
+私の場合は、ファイルを上書き`Y`してから消えたら困るコードを再度貼り付けました。
+差分を確認`d`しておくと上書きによって消えたコードがターミナルに表示されているので、コピペが捗ります。
+
+
+
+## Gemfileにを追記 `gem 'bootsnap'`
+
+コマンドライン操作後に`rails server`を実行すると'bootsnap'が見つからないとエラーが出ます。
+※ Rails 5.1 → 5.2にアップデートした場合。
+
+ないものは追加すればいいです。
+
+``` 
+# ./Gemfile
+gem 'rails',        '5.2.4.2'
+gem 'bootsnap'    # 追加
+```
+
+その後、コマンドラインでインストールします。
+
+`$ bundle install`
+
+
+
+
+## 動作確認（`$ rails s`テスト・静的コード解析など）
+
+テストがあればテストを、静的コード解析を導入していれば解析を実行します。
+静的コード解析でRuboCopを利用している場合、上書きされた設定ファイルを修正するように怒られると思います。
+
+以上で、Rails 5.2.4.2へのアップグレードは終了ですーーと言いたいところですが、Herokuにアップロードするとアプリがクラッシュするかもしれません。
+少なくとも、私の環境ではクラッシュしました。
+
+
+
+
+# Rails 5.2にアップグレードしたらアプリがクラッシュした
+
+クラッシュの要因は、pumaが正常に起動しなくなったことです。
+
+`$ heroku logs --tail`
+
+```
+2020-04-19T15:35:28.000000+00:00 app[api]: Build started by user hogehoge@email.com
+2020-04-19T15:36:13.365787+00:00 heroku[web.1]: State changed from crashed to starting
+2020-04-19T15:36:12.809782+00:00 app[api]: Deploy ec32217e by user hogehoge@email.com
+2020-04-19T15:36:12.809782+00:00 app[api]: Release v23 created by user hogehoge@email.com
+2020-04-19T15:36:21.000000+00:00 app[api]: Build succeeded
+2020-04-19T15:36:24.075033+00:00 app[web.1]: Puma starting in single mode...
+2020-04-19T15:36:24.075060+00:00 app[web.1]: * Version 3.12.4 (ruby 2.6.5-p114), codename: Llamas in Pajamas
+2020-04-19T15:36:24.075061+00:00 app[web.1]: * Min threads: 5, max threads: 5
+2020-04-19T15:36:24.075061+00:00 app[web.1]: * Environment: production
+2020-04-19T15:36:31.545845+00:00 app[web.1]: * Listening on tcp://0.0.0.0:44765
+2020-04-19T15:36:31.550811+00:00 app[web.1]: bundler: failed to load command: puma (/app/vendor/bundle/ruby/2.6.0/bin/puma)
+2020-04-19T15:36:31.550850+00:00 app[web.1]: Errno::ENOENT: No such file or directory @ rb_sysopen - tmp/pids/server.pid
+2020-04-19T15:36:31.550853+00:00 app[web.1]: /app/vendor/bundle/ruby/2.6.0/gems/puma-3.12.4/lib/puma/launcher.rb:133:in `initialize'
+2020-04-19T15:36:31.550854+00:00 app[web.1]: /app/vendor/bundle/ruby/2.6.0/gems/puma-3.12.4/lib/puma/launcher.rb:133:in `open'
+2020-04-19T15:36:31.550854+00:00 app[web.1]: /app/vendor/bundle/ruby/2.6.0/gems/puma-3.12.4/lib/puma/launcher.rb:133:in `write_pid'
+2020-04-19T15:36:31.550855+00:00 app[web.1]: /app/vendor/bundle/ruby/2.6.0/gems/puma-3.12.4/lib/puma/launcher.rb:106:in `write_state'
+2020-04-19T15:36:31.550855+00:00 app[web.1]: /app/vendor/bundle/ruby/2.6.0/gems/puma-3.12.4/lib/puma/single.rb:103:in `run'
+2020-04-19T15:36:31.550855+00:00 app[web.1]: /app/vendor/bundle/ruby/2.6.0/gems/puma-3.12.4/lib/puma/launcher.rb:186:in `run'
+2020-04-19T15:36:31.550856+00:00 app[web.1]: /app/vendor/bundle/ruby/2.6.0/gems/puma-3.12.4/lib/puma/cli.rb:80:in `run'
+2020-04-19T15:36:31.550856+00:00 app[web.1]: /app/vendor/bundle/ruby/2.6.0/gems/puma-3.12.4/bin/puma:10:in `<top (required)>'
+2020-04-19T15:36:31.550857+00:00 app[web.1]: /app/vendor/bundle/ruby/2.6.0/bin/puma:23:in `load'
+2020-04-19T15:36:31.550858+00:00 app[web.1]: /app/vendor/bundle/ruby/2.6.0/bin/puma:23:in `<top (required)>'
+2020-04-19T15:36:31.691119+00:00 heroku[web.1]: State changed from starting to crashed
+2020-04-19T15:36:31.694751+00:00 heroku[web.1]: State changed from crashed to starting
+```
+
+解決のヒントはここです。
+
+```
+bundler: failed to load command: puma (/app/vendor/bundle/ruby/2.6.0/bin/puma)
+Errno::ENOENT: No such file or directory @ rb_sysopen - tmp/pids/server.pid
+```
+
+
+### 原因
+
+`$ rails app:update`コマンドで各設定ファイルを上書きした際に、
+`/config/puma.rb`のこの一文追加が原因みたいです。
+
+```
++ # Specifies the `pidfile` that Puma will use.
++ pidfile ENV.fetch("PIDFILE") { "tmp/pids/server.pid" }
+```
+
+ここで`/tmp/pids/server.pid`を参照していますが、
+.gitignoreで`/tmp/*`を指定しているため、リポジトリ上にpidsディレクトリが存在せずエラーになっていました。
+
+
+
+### 解決策
+
+ないものは作ればいいです。
+
+ディレクトリ `/tmp/pids`
+空ファイル `/tmp/pids/.keep`
+※ 他のエラー報告では `/tmp/sockets/` も必要とのことだったので、念の為作成します。
+
+.gitignoreに下記を追加しました。
+※ 作業前に、一度コミットしておくことをオススメします。
+
+``` 
+#./.gitignore
+
+/tmp/*
+!/tmp/.keep
+!/tmp/pids/
+/tmp/pids/*
+!/tmp/pids/.keep
+!/tmp/sockets/
+/tmp/sockets/*
+!/tmp/sockets/.keep
+```
+
+以上で、Gitの監視対象に `/temp/pids/.keep`（/temp/sockets/.keepも）が含まれるはずなので確認してください。
+
+もし監視対象に含まれていなかった場合は、Gitキャッシュが悪さしている可能性があるので、次のコマンドでキャッシュを一度削除します。
+
+```
+$ git rm -r --cached .
+$ git rm -r --cached ./*  # これでもOK
+
+$ git add -A
+$ git commit -m ".gitignoreを更新"
+```
+
+キャッシュを消した時点で全ファイルが変更されたようになって焦ってしまうかもしれませんが、強く生きてください。
+commitするとGitがよしなにやってくれます。
+
+一応個別でキャッシュを消すコマンドもありますが、私の場合はこのコマンドでは上手くいきませんでした。
+参考リンク置いときます。
+[.gitignoreを更新しても反映されないときは「git rm -r –cached .」でキャッシュを削除](https://blog.s-giken.net/394.html)
+
+
+
+## Rails 5.2.4.2 へのアップグレード完了
+
+セキュリティアラートが消えているはずなので、GitHubを確認してください。
+
+以上で、Railsのアップグレードは完了です。
+長くなってしまいましたが、お疲れさまでした！
 
 ；
